@@ -1,5 +1,6 @@
 #!/bin/bash
 
+APP_NAME=nginx
 source ./functions.sh
 
 #user validation
