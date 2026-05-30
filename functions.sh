@@ -46,8 +46,7 @@ app_user_setup(){
     mkdir -p /app 
     curl -o /tmp/"$APP_NAME".zip https://roboshop-artifacts.s3.amazonaws.com/"$APP_NAME"-v3.zip &>> $LOGS_FILE
     cd /app 
-    unzip /tmp/APP_NAME.zip &>> $LOGS_FILE
-    
+    unzip /tmp/"$APP_NAME".zip &>> $LOGS_FILE
     VALIDATE $? "Downloading the dependencies and packaging the App"
 
     cp "$SCRIPTDIR"/configs/"$APP_NAME".service /etc/systemd/system/
