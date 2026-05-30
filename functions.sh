@@ -1,0 +1,87 @@
+#!/bin/bash
+
+shopt -s nocasematch
+
+PROJECT_NAME=robo
+RED='\e[31m'
+GREEN='\e[32m'
+YELLOW='\e[33m'
+NOCOLOR='\e[0m'
+LOGS_FOLDER="/var/log/roboshop"
+sudo mkdir -p $LOGS_FOLDER
+sudo chown -R ec2-user:ec2-user $LOGS_FOLDER
+sudo chmod -R 755 $LOGS_FOLDER
+LOGS_FILE="$LOGS_FOLDER/$0.log"
+TIMESTAMP=$(date '+%Y-%m-%d %T')
+SCRIPTDIR=$PWD
+
+user_validation(){
+    if [ $(id -u) -ne 0 ]; then
+        echo -e "$RED Please run this script as Root User $NOCOLOR" | tee -a $LOGS_FILE
+        exit 1
+    fi  
+}
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo -e "$TIMESTAMP $RED [ERROR] $NOCOLOR -- $2 Failed" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo -e "$TIMESTAMP $GREEN [SUCCESS] $NOCOLOR -- $2 Success" | tee -a $LOGS_FILE
+    fi
+}
+
+app_user_setup(){
+    id roboshop &>> $LOGS_FILE
+    if [ $? -ne 0 ]; then
+        useradd --system --home /app --shell /sbin/nologin --comment "roboshop system user" roboshop
+        VALIDATE $? "Creating the user for the application"
+    else
+        echo "User roboshop already exists"
+    fi
+
+    rm -rf /app
+    VALIDATE $? "Removing existing code"
+
+    mkdir -p /app 
+    curl -o /tmp/"$APP_NAME".zip https://roboshop-artifacts.s3.amazonaws.com/"$APP_NAME"-v3.zip &>> $LOGS_FILE
+    cd /app 
+    unzip /tmp/APP_NAME.zip &>> $LOGS_FILE
+    
+    VALIDATE $? "Downloading the dependencies and packaging the App"
+
+    cp "$SCRIPTDIR"/configs/"$APP_NAME".service /etc/systemd/system/
+    VALIDATE $? "Creating the $APP_NAME service for the App"
+}
+
+nodejs_setup(){
+    dnf module disable nodejs -y &>> $LOGS_FILE
+    dnf module enable nodejs:20 -y &>> $LOGS_FILE
+    dnf install nodejs -y &>> $LOGS_FILE
+    npm install  &>> $LOGS_FILE
+    VALIDATE $? "Enabling and installing the NodeJS 20"
+}
+
+service_setup(){
+    systemctl daemon-reload
+    systemctl enable "$APP_NAME" &>> $LOGS_FILE
+    systemctl start "$APP_NAME"
+    VALIDATE $? "Enabling and starting the "$APP_NAME" services"
+}
+
+java_setup(){
+    dnf install maven -y &>> $LOGS_FILE
+    VALIDATE $? "Installing the Maven"
+
+    mvn clean package &>> $LOGS_FILE
+    mv target/shipping-1.0.jar shipping.jar &>> $LOGS_FILE
+    VALIDATE $? "Building the dependencies and packaging the App"
+}
+
+python_setup(){
+    dnf install python3 gcc python3-devel -y &>> $LOGS_FILE
+    VALIDATE $? "Installing the Python and its packages"
+
+    pip3 install -r requirements.txt &>> $LOGS_FILE
+    VALIDATE $? "Building the dependencies and packaging the App"
+}
